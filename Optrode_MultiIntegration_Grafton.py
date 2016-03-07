@@ -19,6 +19,8 @@ Green_Laser = "FIO1"
 Green_Shutter = "FIO3"
 Blue_Laser = "FIO0"
 Blue_Shutter = "FIO2"
+Green_Shutter_CloseDelay = 0.03  #Delay in seconds for the shutter to close
+Blue_Shutter_CloseDelay = 0.010  #Delay in seconds for the shutter to close
 
 #Laser_Port = Blue_Laser
 #Shutter_Port = Shutter_Blue
@@ -35,6 +37,11 @@ def Timer_Multi_Process(Time_In_Seconds):
     time.sleep(Time_In_Seconds)
     Timer_Is_Done.value = 1
 
+def Timer_Multi_Process2(Time_In_Seconds):
+    if Timer_Is_Done2.value is 1:
+        print 'Error: This timer can be run one at a time. Either the previous timer is still running, or Timer_Is_Done bit is reset from previous timer run'
+    time.sleep(Time_In_Seconds)
+    Timer_Is_Done2.value = 1
 
 # # A function for initializing the spectrometer (integration time and triggering mode '''
 def SB_Init_Process(Spec_handle,Integration_time, Trigger_mode):
@@ -86,10 +93,12 @@ if __name__ == "__main__":
         if (Current_Laser == 'G') | (Current_Laser == 'g'):
             Laser_Port = Green_Laser
             Shutter_Port = Green_Shutter
+            Shutter_CloseDelay = Green_Shutter_CloseDelay
             break
         elif (Current_Laser == 'B') | (Current_Laser == 'b'):
             Laser_Port = Blue_Laser
             Shutter_Port = Blue_Shutter
+            Shutter_CloseDelay = Blue_Shutter_CloseDelay
             break
         else:
             print 'Wrong input!'
@@ -98,14 +107,17 @@ if __name__ == "__main__":
     # ##################### Initializing the variables ###################
     #Integration_list = [8000, 16000, 32000, 64000, 128000, 256000, 512000, 1024000, 2048000]
     Integration_list_sec = [0.008, 0.016, 0.032, 0.064, 0.128, 0.256, 0.512 ]
-    Integration_marging = 0.3                                        #(In seconds) This is the duration before the external edge trigger is given to the spectrometer while the specrumeter started the integration period
-    Integration_base = Integration_list_sec[-1]*1000000 + Integration_marging*2000000    # This is the integration time applied for all the trials
+    Integration_marging = 0.2                                        #(In seconds) This is the duration before the external edge trigger is given to the spectrometer while the specrumeter started the integration period
+    #Integration_base = Integration_list_sec[-1]*1000000 + Integration_marging*2000000    # This is the integration time applied for all the trials
+    Integration_base =  2*1000000    # This is the integration time applied for all the trials in microseconds
     No_DAC_Sample = 10000 # Number of samples for Photodiod per iteration of the laser exposer. Every sample takes ~0.6 ms.
     SB_Is_Done = Value('i', 0)
     SB_Current_Record = Array('d', np.zeros(shape=( len(Spec_handle.wavelengths()) ,1), dtype = float ))
     SB_Is_Done.value = 0
     Timer_Is_Done = Value('i', 0)
     Timer_Is_Done.value = 0
+    Timer_Is_Done2 = Value('i', 0)
+    Timer_Is_Done2.value = 0
     SB_Full_Records = np.zeros(shape=(len(Spec_handle.wavelengths()), len(Integration_list_sec)+1 ), dtype = float )
     read_signal = np.zeros(No_DAC_Sample*len(Integration_list_sec))
     read_time   = np.zeros(No_DAC_Sample*len(Integration_list_sec))
@@ -153,9 +165,8 @@ if __name__ == "__main__":
 
     # ## The main loop for recording the spectrometer and the photodiod ##
     while Integration_index < len(Integration_list_sec):
-
-
-        Start_time = time.time()
+        #Start_time = time.time()
+        Timer_Is_Done.value = 0
         P_Timer = Process(target=Timer_Multi_Process, args=(Integration_marging,)) # keep the laser on before opening the shutter
         P_Timer.start()
 
@@ -164,19 +175,17 @@ if __name__ == "__main__":
 
         DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 1)       #Laser is on
         DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 5)  # Spec is edge-triggered  and start ~20ms later to acquire
-        time.sleep(0.03)
+        time.sleep(0.01)
         DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 0)
         time.sleep(0.01)
         Open_delay = time.time()
-        Timer_Is_Done.value = 0
 
         while Timer_Is_Done.value == 0:
             DAC_Sampl_Index += 1
             read_signal_ref[DAC_Sampl_Index] = State
             read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
 
-        print 'Elapsed time %f' %(time.time() - Start_time)
-        Timer_Is_Done.value = 0
+        #print 'Elapsed time %f' %(time.time() - Start_time)
         Latch_Laser_Detect = 0
 
 
@@ -191,6 +200,16 @@ if __name__ == "__main__":
             P2.start()
             DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 5)  # Spec is edge-triggered  and start ~20ms later to acquire
             time.sleep(0.04)
+
+
+        Timer_Is_Done.value = 0
+        P_Timer = Process(target=Timer_Multi_Process, args=(Integration_base/float(1000000) - Integration_marging*2 - Integration_list_sec[Integration_index],)) # keep the laser on before opening the shutter
+        P_Timer.start()
+        while Timer_Is_Done.value == 0:
+            DAC_Sampl_Index += 1
+            read_signal_ref[DAC_Sampl_Index] = State
+            read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
+
         DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 1)       #Shutter opens in ~9ms since now
         #time.sleep(0.02)
         CurrentDelay = Integration_list_sec[Integration_index] - 0.005
@@ -201,9 +220,11 @@ if __name__ == "__main__":
             if  (Latch_Laser_Detect == 0) & (read_signal[DAC_Sampl_Index] > 0.3):
                 State = 4.5
                 #print CurrentDelay
+                Timer_Is_Done.value = 0
                 P_Timer = Process(target=Timer_Multi_Process, args=(CurrentDelay,)) # keep the laser on before opening the shutter
                 P_Timer.start()
                 Latch_Laser_Detect = 1
+
                 while Timer_Is_Done.value == 0:
                     #print 'step 3'
                     DAC_Sampl_Index += 1
@@ -211,7 +232,23 @@ if __name__ == "__main__":
                     read_signal_ref[DAC_Sampl_Index] = State
                 State = 0
                 DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 0)       #Laser is off
-                DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 0)       #Shutter opens in ~9ms since now
+
+                DAC_Sampl_Index += 1
+                read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
+                read_signal_ref[DAC_Sampl_Index] = State
+
+                DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 0)       #Shutter closes in ~9ms since now
+
+                P_Timer2 = Process(target=Timer_Multi_Process2, args=(Shutter_CloseDelay,)) # keep the laser on before opening the shutter
+                P_Timer2.start()
+                while Timer_Is_Done2.value == 0:
+                    #print 'step 3'
+                    DAC_Sampl_Index += 1
+                    read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
+                    read_signal_ref[DAC_Sampl_Index] = State
+                Timer_Is_Done2.value = 0
+                #time.sleep(0.030)
+                DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 1)       #Laser is on
                 #Open_delay[Shutter_Open_Delay_Index] = time.time() - Open_time
 
 
@@ -244,7 +281,7 @@ if __name__ == "__main__":
         time.sleep(0.05)
     while SB_Is_Done.value == 0:
         time.sleep(0.1)
-        print 'BackGround'
+        #print 'BackGround'
     SB_Full_Records[:,Spec_Sampl_Index] = SB_Current_Record[:]
 
 
@@ -291,4 +328,4 @@ if __name__ == "__main__":
     plt.title('Specrometer recordings')
     plt.xlabel('Wavelength (nano meter)')
     plt.ylabel('Intensity')
-    plt.pause(1)
+    plt.pause(0.1)
