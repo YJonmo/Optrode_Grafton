@@ -5,7 +5,6 @@ import time
 import numpy as np
 from multiprocessing import Process, Pipe, Value, Array
 from labjack import ljm
-import SeaBreeze_Obj as SB
 import matplotlib.pyplot as plt
 import os.path
 time_start =  time.time()
