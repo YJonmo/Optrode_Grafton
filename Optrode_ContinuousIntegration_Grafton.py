@@ -2,6 +2,7 @@ import h5py
 import DAQT7_Obj as DAQ
 import SeaBreeze_Obj as SB
 import time
+import datetime
 import numpy as np
 from multiprocessing import Process, Pipe, Value, Array
 from labjack import ljm
@@ -116,8 +117,8 @@ if __name__ == "__main__":
     # ########### The file containing the records (HDF5 format)###########'''
     Path_to_Records = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Records"
     os.chdir(Path_to_Records)
-    File_name = time.strftime('%Y%m%d%H%M%S')+"_" + "powermeter_10_01" + ".hdf5"
-    #"473nm_power_meas" + str('%i' %time.time())+ ".hdf5"
+    #File_name = "water_4_background9" + str('%i' %time.time())+ ".hdf5"
+    File_name = "water_4_" + str('%s' %datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S'))+ ".hdf5"
     #File_name = "Opterode_Recording_At" + str('%i' %time.time())+ ".hdf5"
     f = h5py.File(File_name, "w")
     Spec_sub1 = f.create_group("Spectrumeter")
@@ -131,7 +132,7 @@ if __name__ == "__main__":
     os.chdir(Path_to_Fred_Codes)
 
 
-    Spec_Integration_Time = 20000                       # Integration time for free running mode
+    Spec_Integration_Time = 22000                       # Integration time for free running mode
     P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
     P1.start()
     time.sleep(0.1)
@@ -199,7 +200,7 @@ if __name__ == "__main__":
     DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 0)
     DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 0)
 
-    P_Timer = Process(target=Timer_Multi_Process, args=(0.1,))
+    P_Timer = Process(target=Timer_Multi_Process, args=(0.1,)) # keep the laser on before opening the shutter
     P_Timer.start()
     while Timer_Is_Done.value == 0:
         DAC_Sampl_Index += 1
@@ -211,7 +212,6 @@ if __name__ == "__main__":
         P2.terminate()
     if P1.is_alive():
         P1.terminate()
-
 
     # ########### Saving the recorded signals in HDF5 format ############
     read_signal2 = np.zeros(DAC_Sampl_Index)
