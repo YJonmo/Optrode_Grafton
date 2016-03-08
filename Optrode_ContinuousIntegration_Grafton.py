@@ -6,7 +6,6 @@ import datetime
 import numpy as np
 from multiprocessing import Process, Pipe, Value, Array
 from labjack import ljm
-import SeaBreeze_Obj as SB
 import matplotlib.pyplot as plt
 import os.path
 time_start =  time.time()
@@ -132,17 +131,19 @@ if __name__ == "__main__":
     os.chdir(Path_to_Fred_Codes)
 
 
-    Spec_Integration_Time = 22000                       # Integration time for free running mode
+    Spec_Integration_Time = 20000                       # Integration time for free running mode
+    P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
+    P1.start()
+    time.sleep(0.1)
+    '''
     P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
     P1.start()
     time.sleep(0.1)
     P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
     P1.start()
     time.sleep(0.1)
-    P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
-    P1.start()
-    time.sleep(0.1)
-
+    '''
+    
     State = 0
 
     DAC_Sampl_Index = -1
@@ -174,6 +175,7 @@ if __name__ == "__main__":
     P2.start()
 
     SB_Is_Done.value = 0
+
     while SB_Is_Done.value == 0:
             DAC_Sampl_Index += 1
             read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
@@ -182,7 +184,7 @@ if __name__ == "__main__":
 
     while Spec_Sampl_Index < No_Spec_Sample:
 
-        Start_time = time.time()
+        #Start_time = time.time()
         P2 = Process(target=SB_Read_Process, args=(Spec_handle,))
         P2.start()
         SB_Is_Done.value = 0
@@ -190,9 +192,11 @@ if __name__ == "__main__":
             DAC_Sampl_Index += 1
             read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
 
+
         SB_Full_Records[:,Spec_Sampl_Index] = SB_Current_Record[:]
         #print SB_Full_Records[0,Spec_Sampl_Index]
         Spec_Sampl_Index += 1
+        #print 'Elapsed time %f' %(time.time() - Start_time)
 
         #print (time.time() - Start_time)
 
