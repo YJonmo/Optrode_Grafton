@@ -2,10 +2,10 @@ import h5py
 import DAQT7_Obj as DAQ
 import SeaBreeze_Obj as SB
 import time
+import datetime
 import numpy as np
 from multiprocessing import Process, Pipe, Value, Array
 from labjack import ljm
-import SeaBreeze_Obj as SB
 import matplotlib.pyplot as plt
 import os.path
 time_start =  time.time()
@@ -14,11 +14,12 @@ time_start =  time.time()
 # ######################### Naming the DAQ ports ##########################
 # FIO0 = shutter of the green laser and FIO1 is the shutter of the blue laser
 # FIO2 = is the green laser and the FIO3 is the blue laser
-#
 Green_Laser = "FIO1"
 Green_Shutter = "FIO3"
 Blue_Laser = "FIO0"
 Blue_Shutter = "FIO2"
+Green_Shutter_CloseDelay = 0.03  #Delay in seconds for the shutter to close
+Blue_Shutter_CloseDelay = 0.010  #Delay in seconds for the shutter to close
 
 #Laser_Port = Blue_Laser
 #Shutter_Port = Shutter_Blue
@@ -56,7 +57,6 @@ def SB_Read_Process(Spec_handle):
     Intensities = SB.Read(Spec_handle, Correct_dark_counts, Correct_nonlinearity)
     #print Intensities
     SB_Current_Record[:] = Intensities
-    #SB_Current_Record[0] = np.float(time.time())
     SB_Is_Done.value = 1
     #print "Intensities are read"
     return
@@ -87,27 +87,31 @@ if __name__ == "__main__":
     DAQ.Digital_Ports_Write(DAQ_handle, Blue_Shutter, 0)       #Shutter is close
 
 
-    while 1==1:
+    while True:
         Current_Laser = raw_input('Which laser you want? Press G for green laser or press B for blue laser and then press Enter:')
         if (Current_Laser == 'G') | (Current_Laser == 'g'):
             Laser_Port = Green_Laser
             Shutter_Port = Green_Shutter
+            Shutter_CloseDelay = Green_Shutter_CloseDelay
             break
         elif (Current_Laser == 'B') | (Current_Laser == 'b'):
             Laser_Port = Blue_Laser
             Shutter_Port = Blue_Shutter
+            Shutter_CloseDelay = Blue_Shutter_CloseDelay
             break
         else:
             print 'Wrong input!'
 
+
     # ##################### Initializing the variables ###################
     #Integration_list = [8000, 16000, 32000, 64000, 128000, 256000, 512000, 1024000, 2048000]
-    #Integration_list_sec = [0.008, 0.016, 0.032, 0.064, 0.128, 0.256, 0.512, 1.024, 2.048]
+    Integration_list_sec = [0.008, 0.016, 0.032, 0.064, 0.128, 0.256, 0.512 ]
     Integration_marging = 0.3                                        #(In seconds) This is the duration before the external edge trigger is given to the spectrometer while the specrumeter started the integration period
-    No_Spec_Sample = 100
     #Integration_base = Integration_list_sec[-1]*1000000 + Integration_marging*2000000    # This is the integration time applied for all the trials
-    Integration_base = 32000
+    Integration_base =  2*1000000    # This is the integration time applied for all the trials in microseconds
     No_DAC_Sample = 10000 # Number of samples for Photodiod per iteration of the laser exposer. Every sample takes ~0.6 ms.
+    No_Spec_Sample = 100
+    Spec_Delay2   = np.zeros(No_Spec_Sample)
     SB_Is_Done = Value('i', 0)
     SB_Current_Record = Array('d', np.zeros(shape=( len(Spec_handle.wavelengths()) ,1), dtype = float ))
     SB_Is_Done.value = 0
@@ -115,16 +119,22 @@ if __name__ == "__main__":
     Timer_Is_Done.value = 0
     Timer_Is_Done2 = Value('i', 0)
     Timer_Is_Done2.value = 0
-    SB_Full_Records = np.zeros(shape=(len(Spec_handle.wavelengths()),  No_Spec_Sample), dtype = float )
-    read_signal = np.zeros(No_DAC_Sample*Integration_base)
-    read_time   = np.zeros(No_DAC_Sample*Integration_base)
+    SB_Full_Records = np.zeros(shape=(len(Spec_handle.wavelengths()), len(Integration_list_sec)+1 ), dtype = float )
+    read_signal = np.zeros(No_DAC_Sample*len(Integration_list_sec))
+    read_time   = np.zeros(No_DAC_Sample*len(Integration_list_sec))
+    '''
+    Open_delay = np.zeros(50)
+    Close_delay = np.zeros(50)
+    '''
+    read_signal_ref = np.zeros(No_DAC_Sample*len(Integration_list_sec))
+    read_time_ref   = np.zeros(No_DAC_Sample*len(Integration_list_sec))
 
 
     # ########### The file containing the records (HDF5 format)###########'''
     Path_to_Records = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Records"
     os.chdir(Path_to_Records)
-    File_name = time.strftime('%Y%m%d%H%M%S')+"_" + "powermeter_10_01" + ".hdf5"
-    #"473nm_power_meas" + str('%i' %time.time())+ ".hdf5"
+    #File_name = "water_4_" + str('%i' %time.time())+ ".hdf5"
+    File_name = "water_4_" + str('%s' %datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S'))+ ".hdf5"
     #File_name = "Opterode_Recording_At" + str('%i' %time.time())+ ".hdf5"
     f = h5py.File(File_name, "w")
     Spec_sub1 = f.create_group("Spectrumeter")
@@ -133,19 +143,13 @@ if __name__ == "__main__":
     Spec_specification.attrs['Model'] = np.string_(Spec_handle.model)
     Spec_wavelength = f.create_dataset('Spectrumeter/Wavelength', data = Spec_handle.wavelengths())
 
-
-    Path_to_Fred_Codes = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Fred"
-    os.chdir(Path_to_Fred_Codes)
+    #File_name = "Opterode_Recording_At" + str('%i' %time.time())+ ".hdf5"
 
 
-    Spec_Integration_Time = 20000                       # Integration time for free running mode
-    P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
-    P1.start()
+    DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 0)
     time.sleep(0.1)
-    P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
-    P1.start()
-    time.sleep(0.1)
-    P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
+    Spec_Integration_Time = 100000                       # Integration time for free running mode
+    P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,3))
     P1.start()
     time.sleep(0.1)
 
@@ -162,48 +166,46 @@ if __name__ == "__main__":
     while Timer_Is_Done.value == 0:
         DAC_Sampl_Index += 1
         read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
+
+
+
+
+    #DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 1)
+
     Timer_Is_Done.value = 0
+    while Spec_Sampl_Index < No_Spec_Sample:
 
-
-
-    DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 1)
-    P_Timer = Process(target=Timer_Multi_Process, args=(10.1,)) # keep the laser on before opening the shutter
-    P_Timer.start()
-    while Timer_Is_Done.value == 0:
-        P_Timer2 = Process(target=Timer_Multi_Process2, args=(2.00,)) # keep the laser on before opening the shutter
+        DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 0)
+        P_Timer2 = Process(target=Timer_Multi_Process2, args=(0.10,)) # keep the laser on before opening the shutter
         P_Timer2.start()
-        DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 1)
+        #DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 1)
+        Timer_Is_Done2.value = 0
         while Timer_Is_Done2.value == 0:
             DAC_Sampl_Index += 1
             read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
-        Timer_Is_Done2.value = 0
 
-        P_Timer2 = Process(target=Timer_Multi_Process2, args=(0.01,)) # keep the laser on before opening the shutter
-        P_Timer2.start()
-        DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 0)  #Turn the laser on right after first intergration is over, and start recording
-        while Timer_Is_Done2.value == 0:
+
+        SB_Is_Done.value = 0
+        P2 = Process(target=SB_Read_Process, args=(Spec_handle,))
+        P2.start()
+        DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 5)
+        Start_time = time.time()
+
+        while SB_Is_Done.value == 0:
             DAC_Sampl_Index += 1
             read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
-        Timer_Is_Done2.value = 0
 
+        Spec_Delay2[Spec_Sampl_Index] = (time.time() - Start_time)
+        print Spec_Delay2[Spec_Sampl_Index]
+        DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 0)
+        Spec_Sampl_Index = Spec_Sampl_Index + 1
     Timer_Is_Done.value = 0
-
-
-
-
-
-        #print (time.time() - Start_time)
-
 
     DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 1)
     DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 0)
 
 
     DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 1)
-
-
-
-
 
     # ########### Saving the recorded signals in HDF5 format ############
     read_signal2 = np.zeros(DAC_Sampl_Index)
@@ -222,7 +224,7 @@ if __name__ == "__main__":
     Path_to_Fred_Codes = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Fred"
     os.chdir(Path_to_Fred_Codes)
 
-
+    SB.Close(Spec_handle)
     #DAQ.Close(DAQ_handle)
     # ######### Plotting the spectrumeter and the photodiod recordings ########
     plt.figure()
@@ -251,5 +253,3 @@ if __name__ == "__main__":
     plt.xlabel('Iterations index')
     plt.ylabel('Time (ms)')
     plt.pause(.1)
-    SB.Close(Spec_handle)
-
