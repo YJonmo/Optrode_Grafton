@@ -138,7 +138,7 @@ if __name__ == "__main__":
     os.chdir(Path_to_Fred_Codes)
 
 
-    Spec_Integration_Time = 22000                       # Integration time for free running mode
+    Spec_Integration_Time = 20000                       # Integration time for free running mode
     P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
     P1.start()
     time.sleep(0.1)
