@@ -61,7 +61,7 @@ def SB_Read_Process(Spec_handle):
     #print "Intensities are read"
     return
 
-
+ 
 # ######## A function for reading the DAQ analogue inpute on AINX ########
 def DAQ_Read():
     results = DAQ.AIN_Read(DAQ_handle, PhotoDiod_Port)
