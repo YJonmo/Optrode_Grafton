@@ -122,10 +122,7 @@ if __name__ == "__main__":
     SB_Full_Records = np.zeros(shape=(len(Spec_handle.wavelengths()), len(Integration_list_sec)+1 ), dtype = float )
     read_signal = np.zeros(No_DAC_Sample*len(Integration_list_sec))
     read_time   = np.zeros(No_DAC_Sample*len(Integration_list_sec))
-    '''
-    Open_delay = np.zeros(50)
-    Close_delay = np.zeros(50)
-    '''
+
     read_signal_ref = np.zeros(No_DAC_Sample*len(Integration_list_sec))
     read_time_ref   = np.zeros(No_DAC_Sample*len(Integration_list_sec))
 
@@ -276,10 +273,6 @@ if __name__ == "__main__":
         time.sleep(0.1)
         #print 'BackGround'
     SB_Full_Records[:,Spec_Sampl_Index] = SB_Current_Record[:]
-
-
-
-
 
 
     DAQ.Digital_Ports_Write(DAQ_handle, Laser, On)       #Laser stays on
