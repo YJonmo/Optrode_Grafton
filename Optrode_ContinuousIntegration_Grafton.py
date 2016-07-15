@@ -113,6 +113,7 @@ if __name__ == "__main__":
 
 
     # ########### The file containing the records (HDF5 format)###########'''
+    Current_Path = os.path.abspath(os.path.join( os.getcwd()))
     Path_to_Records = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Records"
     os.chdir(Path_to_Records)
     File_name = time.strftime('%Y%m%d%H%M%S')+"_" + "powermeter_10_01" + ".hdf5"
@@ -226,8 +227,8 @@ if __name__ == "__main__":
 
     print 'File %s is saved in %s' %(File_name ,  Path_to_Records)
 
-    Path_to_Fred_Codes = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Fred"
-    os.chdir(Path_to_Fred_Codes)
+    #Path_to_Fred_Codes = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Fred"
+    os.chdir(Current_Path)
 
     SB.Close(Spec_handle)
     #DAQ.Close(DAQ_handle)
