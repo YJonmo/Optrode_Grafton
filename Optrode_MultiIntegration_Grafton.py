@@ -129,6 +129,7 @@ if __name__ == "__main__":
 
 
     # ########### The file containing the records (HDF5 format)###########'''
+    Current_Path = os.path.abspath(os.path.join( os.getcwd()))
     Path_to_Records = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Records"
     os.chdir(Path_to_Records)
     #File_name = "water_4_" + str('%i' %time.time())+ ".hdf5"
@@ -304,8 +305,8 @@ if __name__ == "__main__":
     f.close()
 
 
-    Path_to_Fred_Codes = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Fred"
-    os.chdir(Path_to_Fred_Codes)
+    #Path_to_Fred_Codes = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Fred"
+    os.chdir(Current_Path)
 
     SB.Close(Spec_handle)
     #DAQ.Close(DAQ_handle)
@@ -328,3 +329,4 @@ if __name__ == "__main__":
     plt.xlabel('Wavelength (nano meter)')
     plt.ylabel('Intensity')
     plt.pause(0.1)
+
