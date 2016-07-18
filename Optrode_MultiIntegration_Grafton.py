@@ -178,13 +178,11 @@ if __name__ == "__main__":
         DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 0)
         time.sleep(0.01)
         Open_delay = time.time()
-        print ('%f' %time.time(), 'step1'); print (SB_Is_Done.value)
         
         while Timer_Is_Done.value == 0:
             DAC_Sampl_Index += 1
             read_signal_ref[DAC_Sampl_Index] = State
             read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
-        print ('%f' %time.time(), 'step2') ; print (SB_Is_Done.value)
         #print 'Elapsed time %f' %(time.time() - Start_time)
         Latch_Laser_Detect = 0
 
@@ -192,7 +190,6 @@ if __name__ == "__main__":
         #if SB_Is_Done.value == 1:
         #    print 'Eroooooooor'
         while SB_Is_Done.value == 1:
-            print ('%f' %time.time(), 'step2.5') ; print (SB_Is_Done.value)
             SB_Is_Done.value = 0
             print 'Spectrometer Error, will retrigger the Spectrometer'
             DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 0)
@@ -200,8 +197,7 @@ if __name__ == "__main__":
             P2 = Process(target=SB_Read_Process, args=(Spec_handle,))
             P2.start()
             DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 5)  # Spec is edge-triggered  and start ~20ms later to acquire
-            time.sleep(0.04)
-        print ('%f' %time.time(), 'step3')   ; print (SB_Is_Done.value)  
+            time.sleep(0.04)  
 
         Timer_Is_Done.value = 0
         P_Timer = Process(target=Timer_Multi_Process, args=(Integration_base/float(1000000) - Integration_marging*2 - Integration_list_sec[Integration_index],)) # keep the laser on before opening the shutter
@@ -210,7 +206,6 @@ if __name__ == "__main__":
             DAC_Sampl_Index += 1
             read_signal_ref[DAC_Sampl_Index] = State
             read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
-        print ('%f' %time.time(), 'step4'); print (SB_Is_Done.value)
         DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 1)       #Shutter opens in ~9ms since now
         #time.sleep(0.02)
         CurrentDelay = Integration_list_sec[Integration_index] - 0.005
@@ -225,14 +220,14 @@ if __name__ == "__main__":
                 P_Timer = Process(target=Timer_Multi_Process, args=(CurrentDelay,)) # keep the laser on before opening the shutter
                 P_Timer.start()
                 Latch_Laser_Detect = 1
-                print ('%f' %time.time(), 'step5'); print (SB_Is_Done.value)
+
                 while Timer_Is_Done.value == 0:
                     #print 'step 3'
                     DAC_Sampl_Index += 1
                     read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
                     read_signal_ref[DAC_Sampl_Index] = State
                 State = 0
-                print ('%f' %time.time(), 'step6'); print (SB_Is_Done.value)
+
                 DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 0)       #Laser is off
 
                 DAC_Sampl_Index += 1
@@ -240,7 +235,7 @@ if __name__ == "__main__":
                 read_signal_ref[DAC_Sampl_Index] = State
 
                 DAQ.Digital_Ports_Write(DAQ_handle, Shutter_Port, 0)       #Shutter closes in ~9ms since now
-                print ('%f' %time.time(), 'step7'); print (SB_Is_Done.value)
+
                 P_Timer2 = Process(target=Timer_Multi_Process2, args=(Shutter_CloseDelay,)) # keep the laser on before opening the shutter
                 P_Timer2.start()
                 while Timer_Is_Done2.value == 0:
@@ -248,7 +243,7 @@ if __name__ == "__main__":
                     DAC_Sampl_Index += 1
                     read_signal[DAC_Sampl_Index], read_time[DAC_Sampl_Index] = DAQ_Read()
                     read_signal_ref[DAC_Sampl_Index] = State
-                print ('%f' %time.time(), 'step8'); print (SB_Is_Done.value)
+
                 Timer_Is_Done2.value = 0
                 #time.sleep(0.030)
                 DAQ.Digital_Ports_Write(DAQ_handle, Laser_Port, 1)       #Laser is on
@@ -265,7 +260,7 @@ if __name__ == "__main__":
         SB_Is_Done.value = 0
         Timer_Is_Done.value = 0
 
-    print ('%f' %time.time(), 'step10'); print (SB_Is_Done.value)
+
     DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 0)
     time.sleep(0.01)
     P2 = Process(target=SB_Read_Process, args=(Spec_handle,))
@@ -332,5 +327,6 @@ if __name__ == "__main__":
     plt.xlabel('Wavelength (nano meter)')
     plt.ylabel('Intensity')
     plt.pause(0.1)
+
 
 
