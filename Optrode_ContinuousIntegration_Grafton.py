@@ -2,9 +2,9 @@ import h5py
 import DAQT7_Obj as DAQ
 import SeaBreeze_Obj as SB
 import time
+import datetime
 import numpy as np
-from multiprocessing import Process, Pipe, Value, Array
-from labjack import ljm
+from multiprocessing import Process, Value, Array
 import matplotlib.pyplot as plt
 import os.path
 time_start =  time.time()
@@ -13,11 +13,12 @@ time_start =  time.time()
 # ######################### Naming the DAQ ports ##########################
 # FIO0 = shutter of the green laser and FIO1 is the shutter of the blue laser
 # FIO2 = is the green laser and the FIO3 is the blue laser
-#
 Green_Laser = "FIO1"
 Green_Shutter = "FIO3"
 Blue_Laser = "FIO0"
 Blue_Shutter = "FIO2"
+Green_Shutter_CloseDelay = 0.03  #Delay in seconds for the shutter to close
+Blue_Shutter_CloseDelay = 0.010  #Delay in seconds for the shutter to close
 
 #Laser_Port = Blue_Laser
 #Shutter_Port = Shutter_Blue
@@ -34,6 +35,11 @@ def Timer_Multi_Process(Time_In_Seconds):
     time.sleep(Time_In_Seconds)
     Timer_Is_Done.value = 1
 
+def Timer_Multi_Process2(Time_In_Seconds):
+    if Timer_Is_Done2.value is 1:
+        print 'Error: This timer can be run one at a time. Either the previous timer is still running, or Timer_Is_Done bit is reset from previous timer run'
+    time.sleep(Time_In_Seconds)
+    Timer_Is_Done2.value = 1
 
 # # A function for initializing the spectrometer (integration time and triggering mode '''
 def SB_Init_Process(Spec_handle,Integration_time, Trigger_mode):
@@ -44,15 +50,14 @@ def SB_Init_Process(Spec_handle,Integration_time, Trigger_mode):
 # ########## A function for reading the spectrometer intensities ########### '''
 def SB_Read_Process(Spec_handle):
 
-    #print 'Spectrumeter is waiting'
+    print 'Spectrumeter is waiting'
     Correct_dark_counts = True
     Correct_nonlinearity = True
     Intensities = SB.Read(Spec_handle, Correct_dark_counts, Correct_nonlinearity)
     #print Intensities
     SB_Current_Record[:] = Intensities
-    #SB_Current_Record[0] = np.float(time.time())
     SB_Is_Done.value = 1
-    #print "Intensities are read"
+    print "Intensities are read"
     return
 
 
@@ -69,36 +74,38 @@ if __name__ == "__main__":
     Spec_handle = SB.Detect()
     DAQ_handle = DAQ.Init()
     # ############## All the ports are off at the beginning ##############
-    DAQ.Digital_Ports_Write(DAQ_handle, 'FIO0', 0)
-    DAQ.Digital_Ports_Write(DAQ_handle, 'FIO1', 0)
-    DAQ.Digital_Ports_Write(DAQ_handle, 'FIO2', 0)
-    DAQ.Digital_Ports_Write(DAQ_handle, 'FIO3', 0)
-    DAQ.DAC_Write(DAQ_handle, 'DAC0', 0)
-    DAQ.DAC_Write(DAQ_handle, 'DAC1', 0)
+    #DAQ.Digital_Ports_Write(DAQ_handle, 'FIO0', 0)
+    #DAQ.Digital_Ports_Write(DAQ_handle, 'FIO1', 0)
+    #DAQ.Digital_Ports_Write(DAQ_handle, 'FIO2', 0)
+    #DAQ.Digital_Ports_Write(DAQ_handle, 'FIO3', 0)
+    DAQ.DAC_Write(DAQ_handle, Spectrometer_Trigger_Port, 0)
     DAQ.Digital_Ports_Write(DAQ_handle, Blue_Laser, 1)       #Laser is on
     DAQ.Digital_Ports_Write(DAQ_handle, Green_Laser, 1)       #Laser is on
     DAQ.Digital_Ports_Write(DAQ_handle, Green_Shutter, 0)       #Shutter is close
     DAQ.Digital_Ports_Write(DAQ_handle, Blue_Shutter, 0)       #Shutter is close
-
+    DAQ.DAC_Write(DAQ_handle, 'DAC1', 0)
 
     while 1==1:
         Current_Laser = raw_input('Which laser you want? Press G for green laser or press B for blue laser and then press Enter:')
         if (Current_Laser == 'G') | (Current_Laser == 'g'):
             Laser_Port = Green_Laser
             Shutter_Port = Green_Shutter
+            Shutter_CloseDelay = Green_Shutter_CloseDelay
             break
         elif (Current_Laser == 'B') | (Current_Laser == 'b'):
             Laser_Port = Blue_Laser
             Shutter_Port = Blue_Shutter
+            Shutter_CloseDelay = Blue_Shutter_CloseDelay
             break
         else:
             print 'Wrong input!'
 
+
     # ##################### Initializing the variables ###################
     #Integration_list = [8000, 16000, 32000, 64000, 128000, 256000, 512000, 1024000, 2048000]
     #Integration_list_sec = [0.008, 0.016, 0.032, 0.064, 0.128, 0.256, 0.512, 1.024, 2.048]
-    Integration_marging = 0.3                                        #(In seconds) This is the duration before the external edge trigger is given to the spectrometer while the specrumeter started the integration period
-    No_Spec_Sample = 100
+    Integration_marging = 0.3          
+    No_Spec_Sample = 100                              #(In seconds) This is the duration before the external edge trigger is given to the spectrometer while the specrumeter started the integration period
     #Integration_base = Integration_list_sec[-1]*1000000 + Integration_marging*2000000    # This is the integration time applied for all the trials
     Integration_base = 32000
     No_DAC_Sample = 10000 # Number of samples for Photodiod per iteration of the laser exposer. Every sample takes ~0.6 ms.
@@ -107,17 +114,18 @@ if __name__ == "__main__":
     SB_Is_Done.value = 0
     Timer_Is_Done = Value('i', 0)
     Timer_Is_Done.value = 0
+    Timer_Is_Done2 = Value('i', 0)
+    Timer_Is_Done2.value = 0
     SB_Full_Records = np.zeros(shape=(len(Spec_handle.wavelengths()),  No_Spec_Sample), dtype = float )
     read_signal = np.zeros(No_DAC_Sample*Integration_base)
     read_time   = np.zeros(No_DAC_Sample*Integration_base)
 
 
-    # ########### The file containing the records (HDF5 format)###########'''
     Current_Path = os.path.abspath(os.path.join( os.getcwd()))
     Path_to_Records = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Records"
     os.chdir(Path_to_Records)
-    File_name = time.strftime('%Y%m%d%H%M%S')+"_" + "powermeter_10_01" + ".hdf5"
-    #"473nm_power_meas" + str('%i' %time.time())+ ".hdf5"
+    #File_name = "water_4_" + str('%i' %time.time())+ ".hdf5"
+    File_name = "water_4_" + str('%s' %datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S'))+ ".hdf5"
     #File_name = "Opterode_Recording_At" + str('%i' %time.time())+ ".hdf5"
     f = h5py.File(File_name, "w")
     Spec_sub1 = f.create_group("Spectrumeter")
@@ -127,9 +135,8 @@ if __name__ == "__main__":
     Spec_wavelength = f.create_dataset('Spectrumeter/Wavelength', data = Spec_handle.wavelengths())
 
 
-    Path_to_Fred_Codes = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Fred"
-    os.chdir(Path_to_Fred_Codes)
-
+    #Path_to_Fred_Codes = os.path.abspath(os.path.join( os.getcwd(), os.pardir)) + "/Fred"
+    #os.chdir(Current_Path)
 
     Spec_Integration_Time = 20000                       # Integration time for free running mode
     P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
@@ -141,6 +148,8 @@ if __name__ == "__main__":
     P1 = Process(target=SB_Init_Process, args=(Spec_handle,Spec_Integration_Time,0))
     P1.start()
     time.sleep(0.1)
+
+
 
     State = 0
 
@@ -244,7 +253,8 @@ if __name__ == "__main__":
     plt.pause(.1)
 
     plt.figure()
-    plt.plot(Spec_handle.wavelengths()[1:],SB_Full_Records[1:])
+    plt.plot(Spec_handle.wavelengths()[1:1044],SB_Full_Records[1:1044,:])
+    #plt.plot(Spec_handle.wavelengths()[1:],SB_Full_Records[1:])
     plt.title('Specrometer recordings')
     plt.xlabel('Wavelength (nano meter)')
     plt.ylabel('Intensity')
@@ -259,3 +269,4 @@ if __name__ == "__main__":
     plt.xlabel('Iterations index')
     plt.ylabel('Time (ms)')
     plt.pause(.1)
+
