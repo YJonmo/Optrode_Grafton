@@ -3,9 +3,9 @@ Demonstrates reading 2 analog inputs (AINs) in a loop from a LabJack.
 
 """
 from labjack import ljm
-import matplotlib.pyplot as plt
-import numpy as np
-import time
+#import matplotlib.pyplot as plt
+#import numpy as np
+#import time
 
 
 
@@ -23,8 +23,8 @@ def Init():
     (info[0], info[1], info[2], ljm.numberToIP(info[3]), info[4], info[5]))
     # Setup and call eWriteNames to configure AINs on the LabJack.
     numFrames = 3
-    names = ["AIN0_NEGATIVE_CH", "AIN0_RANGE", "AIN0_RESOLUTION_INDEX"]
-    aValues = [199, 2, 1]
+    names = ["AIN_ALL_NEGATIVE_CH", "AIN_ALL_RANGE", "AIN_ALL_RESOLUTION_INDEX"]
+    aValues = [199, 10, 1]
     ljm.eWriteNames(handle, numFrames, names, aValues)
     #return handle, Info
     return handle
